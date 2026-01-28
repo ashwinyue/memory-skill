@@ -126,20 +126,19 @@ start_claude() {
   echo "🎯 === 准备就绪，启动 Claude Code ==="
   echo ""
 
-  # 设置退出时清理的陷阱
-  trap cleanup EXIT INT TERM
-
   # 启动心跳（后台）
   start_heartbeat
 
-  # 前台启动 Claude Code（会阻塞直到用户退出）
+  # 前台启动 Claude Code（不使用 exec，以便 cleanup 能触发）
   cd "$WORKSPACE"
-  exec claude
+  claude
+
+  # Claude 退出后执行清理
+  cleanup
 }
 
 # 清理函数
 cleanup() {
-  local exit_code=$?
   echo ""
   echo "👋 Claude Code 已退出，清理资源..."
 
@@ -149,21 +148,17 @@ cleanup() {
   # 清理 PID 文件
   rm -f "$CLAUDE_PID_FILE"
 
-  # 如果是正常退出，记录会话结束
-  if [ $exit_code -eq 0 ]; then
-    if [ -x "$MEM_END" ]; then
-      "$MEM_END" "$WORKSPACE" "正常退出" 2>/dev/null || true
-    fi
-
-    # 提取会话记忆
-    if [ -x "$SESSION_EXTRACT" ]; then
-      echo ""
-      echo "📖 正在提取会话记忆..."
-      "$SESSION_EXTRACT" "$WORKSPACE" 2>/dev/null || true
-    fi
+  # 记录会话结束（总是执行，不管 exit code）
+  if [ -x "$MEM_END" ]; then
+    "$MEM_END" "$WORKSPACE" "会话结束" 2>/dev/null || true
   fi
 
-  exit $exit_code
+  # 提取会话记忆
+  if [ -x "$SESSION_EXTRACT" ]; then
+    echo ""
+    echo "📖 正在提取会话记忆..."
+    "$SESSION_EXTRACT" "$WORKSPACE" 2>/dev/null || true
+  fi
 }
 
 # 主命令

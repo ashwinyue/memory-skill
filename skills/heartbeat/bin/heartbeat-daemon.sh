@@ -87,42 +87,43 @@ run_heartbeat() {
     # 调用 Claude CLI
     echo "  → Sending heartbeat prompt to Claude..." | tee -a "$LOG_FILE"
 
-    local response
-    response=$($CLAUDE_BIN -p --model "$CLAUDE_MODEL" \
-        --add-dir "$workspace_for_claude" \
-        --output-format json \
-        "$HEARTBEAT_PROMPT" 2>&1)
+    # 切换到工作目录，让 Claude 能访问本地文件
+    (
+        cd "$workspace_for_claude"
 
-    # 提取文本响应
-    local response_text
-    response_text=$(echo "$response" | jq -r '.content[0].text // empty' 2>/dev/null)
+        local response
+        response=$($CLAUDE_BIN -p --model "$CLAUDE_MODEL" "$HEARTBEAT_PROMPT" 2>&1)
 
-    # 保存完整响应
-    echo "$response_text" >> "$LOG_FILE"
+        # 提取文本响应
+        local response_text="$response"
 
-    # 解析并执行通知指令 :::notify::消息::
-    if echo "$response_text" | grep -q ":::notify::"; then
-        while IFS= read -r line; do
-            if [[ "$line" =~ ":::notify::(.*)::" ]]; then
-                local message="${BASH_REMATCH[1]}"
-                echo "  → 发送通知: $message" | tee -a "$LOG_FILE"
-                osascript -e "display notification \"$message\" with title \"💓 Claude Assistant\"" 2>/dev/null || true
-            fi
-        done <<< "$response_text"
-    fi
+        # 保存完整响应
+        echo "" >> "$LOG_FILE"
+        echo "--- Response ---" >> "$LOG_FILE"
+        echo "$response_text" >> "$LOG_FILE"
 
-    # 更新状态
-    local last_run=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    echo "$response" | jq -r \
-        --arg last "$last_run" \
-        '. + {lastRun: $last}' > "$STATE_FILE"
+        # 解析并执行通知指令 :::notify::消息::
+        if echo "$response_text" | grep -q ":::notify::"; then
+            while IFS= read -r line; do
+                if [[ "$line" =~ ":::notify::(.*)::" ]]; then
+                    local message="${BASH_REMATCH[1]}"
+                    echo "  → 发送通知: $message" | tee -a "$LOG_FILE"
+                    osascript -e "display notification \"$message\" with title \"💓 Claude Assistant\"" 2>/dev/null || true
+                fi
+            done <<< "$response_text"
+        fi
 
-    # 检查是否是 HEARTBEAT_OK
-    if echo "$response_text" | grep -q "HEARTBEAT_OK"; then
-        echo "  → No tasks pending" | tee -a "$LOG_FILE"
-    else
-        echo "  → Tasks executed, check log for details" | tee -a "$LOG_FILE"
-    fi
+        # 更新状态
+        local last_run=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        echo '{"lastRun":"'"$last_run"'"}' > "$STATE_FILE"
+
+        # 检查是否是 HEARTBEAT_OK
+        if echo "$response_text" | grep -q "HEARTBEAT_OK"; then
+            echo "  → No tasks pending" | tee -a "$LOG_FILE"
+        else
+            echo "  → Tasks executed, check log for details" | tee -a "$LOG_FILE"
+        fi
+    )
 }
 
 # 启动守护进程
