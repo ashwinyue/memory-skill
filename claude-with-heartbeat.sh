@@ -15,6 +15,7 @@ WORKSPACE="${WORKSPACE:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 HEARTBEAT_DAEMON="$SCRIPT_DIR/skills/heartbeat/bin/heartbeat-daemon.sh"
 MEM_LOAD="$SCRIPT_DIR/skills/autonomous-memory/bin/mem-load.sh"
 MEM_END="$SCRIPT_DIR/skills/autonomous-memory/bin/mem-end.sh"
+SESSION_EXTRACT="$SCRIPT_DIR/skills/session-extract/bin/extract.sh"
 
 # PID 文件
 CLAUDE_PID_FILE="$WORKSPACE/.claude.pid"
@@ -149,8 +150,17 @@ cleanup() {
   rm -f "$CLAUDE_PID_FILE"
 
   # 如果是正常退出，记录会话结束
-  if [ $exit_code -eq 0 ] && [ -x "$MEM_END" ]; then
-    "$MEM_END" "$WORKSPACE" "正常退出" 2>/dev/null || true
+  if [ $exit_code -eq 0 ]; then
+    if [ -x "$MEM_END" ]; then
+      "$MEM_END" "$WORKSPACE" "正常退出" 2>/dev/null || true
+    fi
+
+    # 提取会话记忆
+    if [ -x "$SESSION_EXTRACT" ]; then
+      echo ""
+      echo "📖 正在提取会话记忆..."
+      "$SESSION_EXTRACT" "$WORKSPACE" 2>/dev/null || true
+    fi
   fi
 
   exit $exit_code
