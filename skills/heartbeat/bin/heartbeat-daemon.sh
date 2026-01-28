@@ -29,8 +29,21 @@ ACTIVE_END="${HEARTBEAT_ACTIVE_END:-23:00}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CLAUDE_MODEL="${CLAUDE_MODEL:-opus}"
 
-# 心跳 prompt
-HEARTBEAT_PROMPT="Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK."
+# 心跳 prompt - 赋予 Claude 自主执行能力
+HEARTBEAT_PROMPT="你是一个自主助手。当前时间：$(date '+%Y-%m-%d %H:%M:%S')
+
+1. 阅读 HEARTBEAT.md 获取任务列表
+2. 根据当前时间判断哪些任务需要执行
+3. **自主执行**任务：
+   - 使用搜索工具收集信息
+   - 使用 Bash 工具运行命令
+   - 读取/写入文件记录结果
+4. 如果无需处理，回复：HEARTBEAT_OK
+
+重要：
+- 不要重复之前会话已完成的任务
+- 执行结果记录到 memory/$(date +%Y-%m-%d).md
+- 紧急事项使用 :::notify::消息:: 语法定义"
 
 # 当前时间（分钟数，用于判断是否在活动窗口）
 current_minutes() {
@@ -80,8 +93,23 @@ run_heartbeat() {
         --output-format json \
         "$HEARTBEAT_PROMPT" 2>&1)
 
-    # 保存响应
-    echo "$response" | jq -r '.content[0].text // empty' >> "$LOG_FILE"
+    # 提取文本响应
+    local response_text
+    response_text=$(echo "$response" | jq -r '.content[0].text // empty' 2>/dev/null)
+
+    # 保存完整响应
+    echo "$response_text" >> "$LOG_FILE"
+
+    # 解析并执行通知指令 :::notify::消息::
+    if echo "$response_text" | grep -q ":::notify::"; then
+        while IFS= read -r line; do
+            if [[ "$line" =~ ":::notify::(.*)::" ]]; then
+                local message="${BASH_REMATCH[1]}"
+                echo "  → 发送通知: $message" | tee -a "$LOG_FILE"
+                osascript -e "display notification \"$message\" with title \"💓 Claude Assistant\"" 2>/dev/null || true
+            fi
+        done <<< "$response_text"
+    fi
 
     # 更新状态
     local last_run=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -90,7 +118,7 @@ run_heartbeat() {
         '. + {lastRun: $last}' > "$STATE_FILE"
 
     # 检查是否是 HEARTBEAT_OK
-    if echo "$response" | jq -re '.content[0].text' | grep -q "HEARTBEAT_OK"; then
+    if echo "$response_text" | grep -q "HEARTBEAT_OK"; then
         echo "  → No tasks pending" | tee -a "$LOG_FILE"
     else
         echo "  → Tasks executed, check log for details" | tee -a "$LOG_FILE"
