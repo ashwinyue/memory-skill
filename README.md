@@ -21,7 +21,22 @@ autonomous-kit/
 
 ## 🚀 快速开始
 
-### 1. 初始化项目
+### 方式一：使用一键启动脚本（推荐）
+
+一键启动脚本会：
+1. 自动加载记忆（SOUL.md、USER.md、AGENTS.md、MEMORY.md、今日日志）
+2. 启动 Claude Code
+3. 后台运行心跳守护进程
+4. 退出时自动记录会话结束
+
+```bash
+cd autonomous-kit
+./claude-with-heartbeat.sh          # 启动 Claude Code + 心跳
+./claude-with-heartbeat.sh --stop   # 停止所有
+./claude-with-heartbeat.sh status   # 查看状态
+```
+
+### 方式二：手动初始化
 
 将人格文件复制到项目根目录：
 
@@ -32,7 +47,7 @@ cp autonomous-kit/personalities/AGENTS.md .
 cp autonomous-kit/personalities/HEARTBEAT.md .
 ```
 
-### 2. 使用记忆技能
+### 方式三：手动使用技能
 
 ```bash
 # 加载记忆
