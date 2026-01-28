@@ -78,6 +78,7 @@ autonomous-kit/skills/heartbeat/bin/heartbeat-run.sh .
 
 ## 📖 详细文档
 
+- [ARCHITECTURE.md](ARCHITECTURE.md) - 架构设计和工作流程
 - [personalties/README.md](personalities/README.md) - 人格系统说明
 - [skills/README.md](skills/README.md) - 技能脚本说明
 
